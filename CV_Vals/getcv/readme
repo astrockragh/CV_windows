@@ -1,0 +1,7 @@
+This is an IDL code to compute the cosmic variance as a function of
+survey geometry, mean redshift, redshift bin size and stellar mass
+
+The main program is getcv.pro
+Enter the parameters (angular dimensions of survey and redshift bins)
+and run getcv to get a table containing the cosmic variance for 6 stellar
+mass bins.

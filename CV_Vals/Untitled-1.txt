@@ -1,0 +1,5 @@
+<p></p>
+<h5><u><strong><span style="font-size: 160%;">DAWN Publications</span></strong></u></h5>
+<p>Published papers only. Will be updated Friday 05/06-2020</p>
+<h5><a href="https://ui.adsabs.harvard.edu/abs/2020NatAs.tmp..113Y/abstract">- The properties of He IIλ1640 emitters at z ∼ 2.5-5 from the VANDELS survey</a>&nbsp;(Saxena, A&nbsp;et al. (DAWN member <em><strong><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Fynbo%2C%20J.%20P.%20U.%22&amp;sort=date%20desc%2C%20bibcode%20desc&amp;p_=0"> Johan Fynbo</a></strong></em>))</h5>
+<h5><a href="https://ui.adsabs.harvard.edu/abs/2020MNRAS.tmp.1298A/abstract">- T </a>&nbsp;(Saxena, A&nbsp;et al. (DAWN member <em><strong><a href="https://ui.adsabs.harvard.edu/search/q=author%3A%22Fynbo%2C%20J.%20P.%20U.%22&amp;sort=date%20desc%2C%20bibcode%20desc&amp;p_=0"> Johan Fynbo</a></strong></em>))</h5>

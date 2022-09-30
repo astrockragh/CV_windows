@@ -1,2 +1,3 @@
 # CV_windows
-Cosmic Variance Notebooks/Python in cosmic_variance
+
+The code for making https://arxiv.org/abs/2111.14865 

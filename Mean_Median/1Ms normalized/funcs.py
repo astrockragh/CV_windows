@@ -23,6 +23,7 @@ y = data[:,1] * x**2 / 3.e18 # Convert to correct flux values
 
 # Constants # Total degrees on the sky
 masses = np.array([8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0]) # Mass bins in log(M/Msun)
+masses = np.arange(8,12,0.25) # Mass bins in log(M/Msun)
 
 trials = 10000 # Number of trials for calculating median from gamma function
 mmin = 9 # Minimum halo mass for HMF
@@ -260,6 +261,238 @@ if file=='extrapolate':
             avmed+=all_med
         return avmean/N, avmed/N, all_sig_v
 
+    def mass_john(survey, correction = True, steps=5,n=1, Nsim=1e7, masses=np.arange(8,11.5,0.5), path = "../../CV_Vals/"):
+            # Get survey information
+            import numpy as np
+            from scipy.stats import gamma
+            import scipy.integrate
+            import pandas
+            # TO DO: Update to most recent Planck results
+            from astropy.cosmology import Planck18_arXiv_v2 as cosmo
+            from tqdm import tqdm
+            point = survey.point
+            survey_area = survey.area * point
+            ABmax = survey.ABmax
+            # Find mean, median number of galaxies found for a given survey design
+            # Absolute magnitude range over which to integrate
+            # Range is larger than necessary to include all galaxies
+            M = np.linspace(-30, 0, 1000)
+            # Redshift values from CV calculations 
+            df = pandas.read_csv(path+survey.file)
+            z_vals = df["z"].values
+            z_vals = z_vals[::-1]
+
+            all_mean = []
+            all_sig_v = []
+            all_indexlen = []
+            # Loop over z values
+            for z in tqdm(z_vals):
+                # Correct magnitude to account for choice of telescope filter
+                if(correction):
+                    # Get observed wavelength for a rest frame of 1600 Angstroms
+                    # Find closest wavelength to this value in the observed galaxy spectrum
+                    wl_obs = nearest_wavelength(x, 1600 * (1 + z))
+                    # Account for difference in observed magnitude due to difference in wavelength 
+                    # of the survey and the wavelength of the 
+                    ABmax_new = ABmax + 2.5 * np.log10(y[x==survey.wavelength]/y[x==wl_obs])
+                else:
+                    ABmax_new = ABmax
+                # Find volume of space within redshift bin
+                dz = df.loc[df['z'] == z][["dz"]].values[0][0]
+                vol = cosmo.comoving_volume(z + dz/2).value - cosmo.comoving_volume(z - dz/2).value
+                # print(vol)
+                # Apparent magnitude range over which to integrate
+                m = M + cosmo.distmod(z).value
+
+                # Schechter Extrapolation (Bouwens et al. 2015)
+                Ms = -20.95 + 0.01 * (z - 6)
+                p = 0.47 * 10**(-0.27 * (z - 6)) * 10**(-3)
+                a = -1.87 - 0.1 * (z - 6)
+                LF_center = np.log(10)/2.5 * p * (10**(0.4 * (Ms - M)))**(a+1) * np.exp(-10**(0.4 * (Ms - M)))
+
+                means = []
+                sigs = []
+                newmass = []
+                indexlen = []
+                # Loop over all mass bins
+                for ma in masses:
+                    sig1 = float(df.loc[df['z'] == z][[str(ma)]].values[0][0]) / np.sqrt(int(point))
+                    if ma>=11.0:
+                        sig2=sig1
+                    else:
+                        sig2 = float(df.loc[df['z'] == z][[str(ma+0.5)]].values[0][0]) / np.sqrt(int(point))
+                    for j in range(steps):
+#                         if ma>=11.0:
+#                             mass=ma
+#                         else:
+                        mass=ma+0.5*(j/steps)
+                        sig_v=sig1*(1-j/steps)+sig2*j/steps
+                        # Account for difference between Song and Bouwens wavelength
+                        diff = 2.5 * np.log10(y[x==nearest_wavelength(x,1505)]/y[x==nearest_wavelength(x,1605)])
+                        u_lim = 2. * (lin(z) - (mass-0.5)) + cosmo.distmod(z).value + diff # Dimmest object
+                        l_lim = 2. * (lin(z) - (mass + 0.5)) + cosmo.distmod(z).value + diff # Brightest object
+                        u_lim = min(u_lim, ABmax_new) # Compare dimmest object to telescope limit 
+                        # print(z, mass, diff, u_lim, l_lim) 
+                        # Apparent magnitude limits for given mass bin using Song et al. 2016
+                        # Find where apparent magnitude is within limits
+                        if mass == np.max(masses):
+                            index = np.where(m <= u_lim)
+                        else:   
+                            index = np.where((m >= l_lim) & (m <= u_lim))
+                        # Modify index for integration
+                        if index[0].size != 0:
+                            index[0][-1] = index[0][-1] + 1
+                        indexlen.append(len(index[0]))
+                        # Integrate luminosity function over apparent magnitude to get number density
+                        int_center = np.trapz(LF_center[index], m[index])
+#                         print(z, mass, diff, u_lim, l_lim, len(index[0]), int_center)
+                        # print(z, mass, int_center)
+                        # print(mass, int_center)
+                        # Multiply by volume to get number
+                        # Get cosmic variance value for this z value and mass bin
+                        # CV values calculated as in Moster et al. 2010
+                        me=int_center * vol * survey_area / tot_sky
+                        means.append(me)
+          
+                        t=trial(sig_v,n*me, int(Nsim))
+                        s1=(np.quantile(t, (50+34)/100)-np.quantile(t, (50-34)/100))/(n*me)/2
+                        s2=(np.quantile(t, (50+47.5)/100)-np.quantile(t, (50-47.5)/100))/(n*me)/4
+                        s3=(np.quantile(t, (50+49.85)/100)-np.quantile(t, (50-49.85)/100))/(n*me)/6
+                        s4=(np.quantile(t, (50+49.997)/100)-np.quantile(t, (50-49.997)/100))/(n*me)/8
+                        s5=(np.quantile(t, (50+49.999971334)/100)-np.quantile(t, (50-49.999971334)/100))/(n*me)/10
+                        s6=(np.quantile(t, (50+49.999999901)/100)-np.quantile(t, (50-49.999999901)/100))/(n*me)/12
+                        
+                        ###could add further estimates
+                        if s5==0:
+                            s5=s6
+                        if s4==0:
+                            s4=s5
+                        if s3==0:
+                            s3=s4
+                        if s2==0:
+                            s2=s3
+                        if s1==0:
+                            s1=s2
+                        
+                        
+#                         if s!=0:
+                        s=(s1+s2+s3+s4+s5+s6)/6
+                        sigs.append(s)
+#                         else:
+#                             sigs.append(sig_v)
+                        newmass.append(mass)
+                # Append mean and variance values of all masses for this redshift 
+                
+                all_mean.append(means[:-(steps)])
+                all_sig_v.append(sigs[:-(steps)]) 
+                all_indexlen.append(indexlen)
+            all_mean=np.array(all_mean)
+            all_mean[all_mean==0] = np.nan
+            return np.array(all_mean), np.array(all_sig_v), newmass[:-steps]
+
+    def mass_jv(survey, correction = True, steps=5, masses=np.arange(8,11.5,0.5), path = "../../CV_Vals/"):
+            # Get survey information
+            import numpy as np
+            from scipy.stats import gamma
+            import scipy.integrate
+            import pandas
+            # TO DO: Update to most recent Planck results
+            from astropy.cosmology import Planck18_arXiv_v2 as cosmo
+            from tqdm import tqdm
+            point = survey.point
+            survey_area = survey.area * point
+            ABmax = survey.ABmax
+            # Find mean, median number of galaxies found for a given survey design
+            # Absolute magnitude range over which to integrate
+            # Range is larger than necessary to include all galaxies
+            M = np.linspace(-30, 0, 1000)
+            # Redshift values from CV calculations 
+            df = pandas.read_csv(path+survey.file)
+            z_vals = df["z"].values
+            z_vals = z_vals[::-1]
+
+            all_mean = []
+            all_sig_v = []
+            all_indexlen = []
+            # Loop over z values
+            for z in z_vals:
+                # Correct magnitude to account for choice of telescope filter
+                if(correction):
+                    # Get observed wavelength for a rest frame of 1600 Angstroms
+                    # Find closest wavelength to this value in the observed galaxy spectrum
+                    wl_obs = nearest_wavelength(x, 1600 * (1 + z))
+                    # Account for difference in observed magnitude due to difference in wavelength 
+                    # of the survey and the wavelength of the 
+                    ABmax_new = ABmax + 2.5 * np.log10(y[x==survey.wavelength]/y[x==wl_obs])
+                else:
+                    ABmax_new = ABmax
+                # Find volume of space within redshift bin
+                dz = df.loc[df['z'] == z][["dz"]].values[0][0]
+                vol = cosmo.comoving_volume(z + dz/2).value - cosmo.comoving_volume(z - dz/2).value
+                # print(vol)
+                # Apparent magnitude range over which to integrate
+                m = M + cosmo.distmod(z).value
+
+                # Schechter Extrapolation (Bouwens et al. 2015)
+                Ms = -20.95 + 0.01 * (z - 6)
+                p = 0.47 * 10**(-0.27 * (z - 6)) * 10**(-3)
+                a = -1.87 - 0.1 * (z - 6)
+                LF_center = np.log(10)/2.5 * p * (10**(0.4 * (Ms - M)))**(a+1) * np.exp(-10**(0.4 * (Ms - M)))
+
+                means = []
+                sigs = []
+                newmass = []
+                indexlen = []
+                # Loop over all mass bins
+                for ma in masses:
+                    sig1 = float(df.loc[df['z'] == z][[str(ma)]].values[0][0]) / np.sqrt(int(point))
+                    if ma>=11.0:
+                        sig2=sig1
+                    else:
+                        sig2 = float(df.loc[df['z'] == z][[str(ma+0.5)]].values[0][0]) / np.sqrt(int(point))
+                    for j in range(steps):
+#                         if ma>=11.0:
+#                             mass=ma
+#                         else:
+                        mass=ma+0.5*(j/steps)
+                        sig_v=sig1*(1-j/steps)+sig2*j/steps
+                        # Account for difference between Song and Bouwens wavelength
+                        diff = 2.5 * np.log10(y[x==nearest_wavelength(x,1505)]/y[x==nearest_wavelength(x,1605)])
+                        u_lim = 2. * (lin(z) - (mass-0.5)) + cosmo.distmod(z).value + diff # Dimmest object
+                        l_lim = 2. * (lin(z) - (mass + 0.5)) + cosmo.distmod(z).value + diff # Brightest object
+                        u_lim = min(u_lim, ABmax_new) # Compare dimmest object to telescope limit 
+                        # print(z, mass, diff, u_lim, l_lim) 
+                        # Apparent magnitude limits for given mass bin using Song et al. 2016
+                        # Find where apparent magnitude is within limits
+                        if mass == np.max(masses):
+                            index = np.where(m <= u_lim)
+                        else:   
+                            index = np.where((m >= l_lim) & (m <= u_lim))
+                        # Modify index for integration
+                        if index[0].size != 0:
+                            index[0][-1] = index[0][-1] + 1
+                        indexlen.append(len(index[0]))
+                        # Integrate luminosity function over apparent magnitude to get number density
+                        int_center = np.trapz(LF_center[index], m[index])
+#                         print(z, mass, diff, u_lim, l_lim, len(index[0]), int_center)
+                        # print(z, mass, int_center)
+                        # print(mass, int_center)
+                        # Multiply by volume to get number
+                        # Get cosmic variance value for this z value and mass bin
+                        # CV values calculated as in Moster et al. 2010
+                        me=int_center * vol * survey_area / tot_sky
+                        means.append(me)
+                        sigs.append(sig_v)
+                        newmass.append(mass)
+                # Append mean and variance values of all masses for this redshift 
+                
+                all_mean.append(means[:-(steps)])
+                all_sig_v.append(sigs[:-(steps)]) 
+                all_indexlen.append(indexlen)
+            all_mean=np.array(all_mean)
+            all_mean[all_mean==0] = np.nan
+            return np.array(all_mean), np.array(all_sig_v), newmass[:-steps]
+
     def mass_sample(survey, correction = True, steps=5, path = "../../CV_Vals/"):
             # Get survey information
             import numpy as np
@@ -345,7 +578,7 @@ if file=='extrapolate':
                         indexlen.append(len(index[0]))
                         # Integrate luminosity function over apparent magnitude to get number density
                         int_center = np.trapz(LF_center[index], m[index])
-                        print(z, mass, diff, u_lim, l_lim, len(index[0]), int_center)
+#                         print(z, mass, diff, u_lim, l_lim, len(index[0]), int_center)
                         # print(z, mass, int_center)
                         # print(mass, int_center)
                         # Multiply by volume to get number
@@ -360,7 +593,7 @@ if file=='extrapolate':
                 all_indexlen.append(indexlen)
             all_mean=np.array(all_mean)
             all_mean[all_mean==0] = np.nan
-            return np.array(all_mean), np.array(all_sig_v), newmass[:-steps], np.array(all_indexlen)
+            return np.array(all_mean), np.array(all_sig_v), newmass[:-steps]
 
 if file=='constant':
     def mean_median(survey, correction = True, path = "../../CV_Vals/"):

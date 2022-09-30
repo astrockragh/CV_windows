@@ -1,3 +1,11 @@
 papers
 Mean_Median/erb2010_continuum.dat
 Distribution_Test/cosmos2015_D17_v2.0_zmin-zmax.fits
+charles_fun
+Distribution_Test/cosmos_gamma.ipynb
+
+Distribution_Test/*.pdf
+Distribution_Test/Distribution_Test.ipynb
+Distribution_Test/reg
+Distribution_Test/figs
+junk

@@ -1,4 +1,0 @@
-# Region file format: DS9 version 3.0
-# Filename: /data/cosmos/web/masks/images/COSMOS.ip.4.fits
-global color=green font="helvetica 10 normal" select=1 edit=1 move=1 delete=1 include=1 fixed=0 source
-fk5;box(150.11917,2.2058333,5091.169",5091.169",0)
